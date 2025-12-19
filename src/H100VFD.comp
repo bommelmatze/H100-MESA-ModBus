@@ -20,7 +20,10 @@ COUNT = number of coils/registers to read
 #define MAX_MSG_LEN 16   // may be increased if necessary to max 251
 //#define DEBUG 3
 
-static const hm2_modbus_chan_descriptor_t channels[] = {
+#define CYCLIC_CHANNELS cyclic_channels
+#define NON_CYCLIC_CHANNELS non_cyclic_channels
+
+static const hm2_modbus_chan_descriptor_t cyclic_channels[] = {
 
 // Read control data ( FUNC = 1 )
 // {TYPE,     FUNC,   ADDR, COUNT, pin_name}
@@ -69,19 +72,20 @@ static const hm2_modbus_chan_descriptor_t channels[] = {
 // Write Relay Control ( FUNC = 6 )
 // {TYPE,     FUNC,   ADDR, COUNT, pin_name}
    {HAL_FLOAT,   6, 0x0204,     1, "Relay.set"},
-   
+};
+
+static const hm2_modbus_chan_descriptor_t non_cyclic_channels[] = {
+
 // Read Write Parameter ( FUNC[] = {3, 6} )
 // {TYPE,     FUNC,   ADDR, COUNT, pin_name}
    {HAL_FLOAT,   6, 0x0000,     1, "000_ParamLock.set"},
    {HAL_FLOAT,   3, 0x0000,     1, "000_ParamLock.read"},
-// {HAL_U32,     3, 0x0000,     1, "000_ParamLock.read"},
-// {HAL_U32,     6, 0x0000,     1, "000_ParamLock.set"},
-// {HAL_FLOAT,   3, 0x0001,     1, "001_SrcRunCom.read"},
 // {HAL_FLOAT,   6, 0x0001,     1, "001_SrcRunCom.set"},
-// {HAL_FLOAT,   3, 0x0002,     1, "002_Src_Op_F.read"},
+// {HAL_FLOAT,   3, 0x0001,     1, "001_SrcRunCom.read"},
 // {HAL_FLOAT,   6, 0x0002,     1, "002_Src_Op_F.set"},
-// {HAL_FLOAT,   3, 0x0003,     1, "003_MainF.read"},
+// {HAL_FLOAT,   3, 0x0002,     1, "002_Src_Op_F.read"},
 // {HAL_FLOAT,   6, 0x0003,     1, "003_MainF.set"},
+// {HAL_FLOAT,   3, 0x0003,     1, "003_MainF.read"},
 };
 
 // vim: syn=c

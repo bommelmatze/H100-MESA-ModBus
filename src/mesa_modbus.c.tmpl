@@ -89,6 +89,33 @@ typedef struct {
 #define DEBUG 1
 #endif
 
+#ifndef CYCLIC_CHANNELS
+#define CYCLIC_CHANNELS channels
+#endif
+
+#define CYCLIC_CHAN_COUNT (sizeof(CYCLIC_CHANNELS) / sizeof(CYCLIC_CHANNELS[0]))
+
+#ifdef NON_CYCLIC_CHANNELS
+#define NON_CYCLIC_CHAN_COUNT (sizeof(NON_CYCLIC_CHANNELS) / sizeof(NON_CYCLIC_CHANNELS[0]))
+#else
+#define NON_CYCLIC_CHAN_COUNT 0
+#endif
+
+#define TOTAL_CHAN_COUNT (CYCLIC_CHAN_COUNT + NON_CYCLIC_CHAN_COUNT)
+
+static const hm2_modbus_chan_descriptor_t *get_descriptor_for_index(int idx){
+    if (idx < CYCLIC_CHAN_COUNT) {
+        return &CYCLIC_CHANNELS[idx];
+    }
+#ifdef NON_CYCLIC_CHANNELS
+    idx -= CYCLIC_CHAN_COUNT;
+    if (idx < NON_CYCLIC_CHAN_COUNT) {
+        return &NON_CYCLIC_CHANNELS[idx];
+    }
+#endif
+    return NULL;
+}
+
 // Values within +/-EPSILON are considered zero
 #define EPSILON  (1e-12)
 
@@ -213,11 +240,16 @@ int rtapi_app_main(void){
     // Parse the config string
     for (i = 0; i < m->num_insts; i++) {
         hm2_modbus_inst_t *inst = &m->insts[i];
-        inst->num_chans = sizeof(channels)/sizeof(channels[0]);
+        inst->num_chans = TOTAL_CHAN_COUNT;
         // there may be more pins than channels
         inst->num_pins = 0;
         for (c = 0; c < inst->num_chans; c++){
-            inst->num_pins += channels[c].count;
+            const hm2_modbus_chan_descriptor_t *desc = get_descriptor_for_index(c);
+            if (!desc) {
+                rtapi_print_msg(RTAPI_MSG_ERR, COMP_NAME" ERROR: descriptor %i out of range\n", c);
+                goto fail0;
+            }
+            inst->num_pins += desc->count;
         }
         // Malloc structs and pins, some in main or kernel memory, some in HAL
         inst->chans = (hm2_modbus_channel_t *)rtapi_kmalloc(inst->num_chans * sizeof(hm2_modbus_channel_t), RTAPI_GFP_KERNEL);
@@ -268,12 +300,17 @@ int rtapi_app_main(void){
         p = 0; // HAL pin index, not aligned to channel index
         for (c = 0; c < inst->num_chans; c++){
             hm2_modbus_channel_t *ch = &(inst->chans[c]);
+            const hm2_modbus_chan_descriptor_t *desc = get_descriptor_for_index(c);
             hal_pin_dir_t dir;
             rtapi_print_msg(RTAPI_MSG_INFO, "ch %i is at %p\n", c, ch);
-            ch->type = channels[c].type;
-            ch->func = channels[c].func;
-            ch->addr = channels[c].addr;
-            ch->count = channels[c].count;
+            if (!desc) {
+                rtapi_print_msg(RTAPI_MSG_ERR, COMP_NAME" ERROR: descriptor %i out of range\n", c);
+                goto fail0;
+            }
+            ch->type = desc->type;
+            ch->func = desc->func;
+            ch->addr = desc->addr;
+            ch->count = desc->count;
             ch->start_pin = p;
             dir = HAL_OUT; //default, is changed depending on function
             switch (ch->func) {
@@ -302,13 +339,13 @@ int rtapi_app_main(void){
                             retval = hal_pin_bit_newf(dir,
                                     (hal_bit_t**)&(inst->hal->pins[p++]),
                                     comp_id, COMP_NAME".%02i.%s-%02i",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                         }
                     } else {
                         retval = hal_pin_bit_newf(dir,
                                     (hal_bit_t**)&(inst->hal->pins[p++]),
                                             comp_id, COMP_NAME".%02i.%s",
-                                            i, channels[c].name);
+                                            i, desc->name);
                     }
                     break;
                 case 6: // write single register
@@ -338,12 +375,12 @@ int rtapi_app_main(void){
                                 retval = hal_pin_u32_newf(dir,
                                     (hal_u32_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                             } else {
                                 retval = hal_pin_u32_newf(dir,
                                     (hal_u32_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s",
-                                    i, channels[c].name);
+                                    i, desc->name);
                             }
                             p++;
                             break;
@@ -352,28 +389,28 @@ int rtapi_app_main(void){
                                 retval = hal_pin_s32_newf(dir,
                                     (hal_s32_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->scale[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i-scale",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                                 retval = hal_pin_float_newf(dir,
                                     (hal_float_t**)&(inst->hal->pin2[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i-scaled",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                             } else {
                                 retval = hal_pin_s32_newf(dir,
                                     (hal_s32_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s",
-                                    i, channels[c].name);
+                                    i, desc->name);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->scale[p]),
                                     comp_id, COMP_NAME".%02i.%s-scale",
-                                    i, channels[c].name);
+                                    i, desc->name);
                                 retval = hal_pin_float_newf(dir,
                                     (hal_float_t**)&(inst->hal->pin2[p]),
                                     comp_id, COMP_NAME".%02i.%s-scaled",
-                                    i, channels[c].name);
+                                    i, desc->name);
                             }
                             *inst->hal->scale[p] = 1.0;
                             inst->hal->buff[p] = 0;
@@ -384,28 +421,28 @@ int rtapi_app_main(void){
                                 retval = hal_pin_float_newf(dir,
                                     (hal_float_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->scale[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i-scale",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->pin2[p]),
                                     comp_id, COMP_NAME".%02i.%s-%02i-offset",
-                                    i, channels[c].name, j);
+                                    i, desc->name, j);
                             } else {
                                 retval = hal_pin_float_newf(dir,
                                     (hal_float_t**)&(inst->hal->pins[p]),
                                     comp_id, COMP_NAME".%02i.%s",
-                                    i, channels[c].name);
+                                    i, desc->name);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->scale[p]),
                                     comp_id, COMP_NAME".%02i.%s-scale",
-                                    i, channels[c].name);
+                                    i, desc->name);
                                 retval = hal_pin_float_newf(HAL_IN,
                                     (hal_float_t**)&(inst->hal->pin2[p]),
                                     comp_id, COMP_NAME".%02i.%s-offset",
-                                    i, channels[c].name);
+                                    i, desc->name);
                             }
                             *(inst->hal->scale[p]) = 1;
                             p++;
