@@ -165,6 +165,8 @@ typedef struct {
     int ptr; // pointer to last byte
     int is_non_cyclic_read;
     int initial_read_done;
+    int is_non_cyclic_write;
+    int initial_write_done;
     rtapi_u8 data[MAX_MSG_LEN + 4]; // add enough space for header and checksum
 } hm2_modbus_channel_t;
 
@@ -320,10 +322,15 @@ int rtapi_app_main(void){
             ch->start_pin = p;
             ch->is_non_cyclic_read = 0;
             ch->initial_read_done = 0;
+            ch->is_non_cyclic_write = 0;
+            ch->initial_write_done = 0;
 #ifdef NON_CYCLIC_CHANNELS
             if (c >= CYCLIC_CHAN_COUNT && ch->func == 3) {
                 ch->is_non_cyclic_read = 1;
                 inst->pending_init_reads++;
+            }
+            if (c >= CYCLIC_CHAN_COUNT && ch->func == 6) {
+                ch->is_non_cyclic_write = 1;
             }
 #endif
             dir = HAL_OUT; //default, is changed depending on function
@@ -822,6 +829,10 @@ static int build_data_frame(hm2_modbus_inst_t *inst){
             break;
         default:
             rtapi_print_msg(RTAPI_MSG_ERR, "Unknown Modbus instruction\n");
+    }
+    if (ch->is_non_cyclic_write && !ch->initial_write_done && ch->func == 6) {
+        ch->initial_write_done = 1;
+        return 0; // suppress initial write for non-cyclic function 6 channels
     }
     return r;
 }
