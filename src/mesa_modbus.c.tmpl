@@ -580,6 +580,15 @@ static void do_timeout(hm2_modbus_inst_t *inst){
 static int select_next_channel(hm2_modbus_inst_t *inst){
     int i;
 
+    if (inst->pending_init_reads > 0){
+        for (i = 0; i < inst->num_chans; i++){
+            hm2_modbus_channel_t *ch = &(inst->chans[i]);
+            if (ch->is_non_cyclic_read && !ch->initial_read_done){
+                return i;
+            }
+        }
+    }
+
     if (inst->num_chans <= 0) return -1;
 
     for (i = 0; i < inst->num_chans; i++){
@@ -829,6 +838,15 @@ static int build_data_frame(hm2_modbus_inst_t *inst){
             break;
         default:
             rtapi_print_msg(RTAPI_MSG_ERR, "Unknown Modbus instruction\n");
+    }
+    if (ch->is_non_cyclic_write && ch->initial_write_done && ch->func == 6 && r > 0) {
+        for (i = 0; i < inst->num_chans; i++){
+            hm2_modbus_channel_t *rch = &(inst->chans[i]);
+            if (rch->is_non_cyclic_read && rch->initial_read_done){
+                rch->initial_read_done = 0;
+                inst->pending_init_reads++;
+            }
+        }
     }
     if (ch->is_non_cyclic_write && !ch->initial_write_done && ch->func == 6) {
         ch->initial_write_done = 1;
