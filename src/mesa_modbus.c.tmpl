@@ -163,6 +163,8 @@ typedef struct {
     int count;
     int start_pin;
     int ptr; // pointer to last byte
+    int is_non_cyclic_read;
+    int initial_read_done;
     rtapi_u8 data[MAX_MSG_LEN + 4]; // add enough space for header and checksum
 } hm2_modbus_channel_t;
 
@@ -185,6 +187,7 @@ typedef struct{
     rtapi_u32 rxdata[257];
     int iter; // used for timeout
     int old_state; // used for timeout
+    int pending_init_reads;
 } hm2_modbus_inst_t;
 
 typedef struct {
@@ -198,6 +201,7 @@ static void process(void *arg, long period);
 static int parse_data_frame(hm2_modbus_inst_t *inst);
 static int build_data_frame(hm2_modbus_inst_t *inst);
 static int do_setup(hm2_modbus_inst_t *inst);
+static int select_next_channel(hm2_modbus_inst_t *inst);
 static uint16_t RTU_CRC(rtapi_u8* buf, int len);
 
 static char *ports[MAX_CHAN];
@@ -294,6 +298,8 @@ int rtapi_app_main(void){
         *(inst->hal->last_err) = 0;
 
         inst->state = START;
+        inst->index = -1;
+        inst->pending_init_reads = 0;
                     
         do_setup(inst);
  
@@ -312,6 +318,14 @@ int rtapi_app_main(void){
             ch->addr = desc->addr;
             ch->count = desc->count;
             ch->start_pin = p;
+            ch->is_non_cyclic_read = 0;
+            ch->initial_read_done = 0;
+#ifdef NON_CYCLIC_CHANNELS
+            if (c >= CYCLIC_CHAN_COUNT && ch->func == 3) {
+                ch->is_non_cyclic_read = 1;
+                inst->pending_init_reads++;
+            }
+#endif
             dir = HAL_OUT; //default, is changed depending on function
             switch (ch->func) {
                 case 5: // write coil
@@ -556,11 +570,28 @@ static void do_timeout(hm2_modbus_inst_t *inst){
     rtapi_print_msg(RTAPI_MSG_INFO, "%i timeout %i\r", inst->iter, inst->state);
 }
 
+static int select_next_channel(hm2_modbus_inst_t *inst){
+    int i;
+
+    if (inst->num_chans <= 0) return -1;
+
+    for (i = 0; i < inst->num_chans; i++){
+        int idx = (inst->index + 1 + i) % inst->num_chans;
+        hm2_modbus_channel_t *ch = &(inst->chans[idx]);
+        if (ch->is_non_cyclic_read && ch->initial_read_done){
+            continue;
+        }
+        return idx;
+    }
+    return -1;
+}
+
 static void process(void *arg, long period) {
     static long timer = 0;
     hm2_modbus_inst_t *inst = arg;
     real_t rate;
     int r;
+    int next_index;
 
     rtapi_u32 rxstatus = hm2_pktuart_get_rx_status(inst->port);
     rtapi_u32 txstatus = hm2_pktuart_get_tx_status(inst->port);
@@ -582,11 +613,12 @@ static void process(void *arg, long period) {
             }
             
             // No incoming data, so service the outputs
-            
-            if (++(inst->index) >= inst->num_chans) {
-                inst->index = 0; // channel counter
+            next_index = select_next_channel(inst);
+            if (next_index < 0){
+                break;
             }
-            
+            inst->index = next_index;
+
             if (build_data_frame(inst)){ // if data has changed
                 r = send_modbus_pkt(inst);
                 inst->state = WAIT_FOR_SEND_BEGIN;
@@ -704,6 +736,10 @@ static int build_data_frame(hm2_modbus_inst_t *inst){
     int r = 0;
     int p = ch->start_pin;
     int i;
+
+    if (ch->is_non_cyclic_read && ch->initial_read_done) {
+        return 0;
+    }
 
     rtapi_print_msg(RTAPI_MSG_INFO, "building packet %X %X start pin %i\n", ch->func, ch->addr, p);
     
@@ -865,6 +901,12 @@ static int parse_data_frame(hm2_modbus_inst_t *inst){
                     break;
                 default:
                     break;
+                }
+            }
+            if (ch->is_non_cyclic_read && !ch->initial_read_done && ch->func == 3){
+                ch->initial_read_done = 1;
+                if (inst->pending_init_reads > 0){
+                    inst->pending_init_reads--;
                 }
             }
             break;
