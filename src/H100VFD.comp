@@ -1,0 +1,87 @@
+/*
+The format of the channel descriptors is:
+
+{TYPE, FUNC, ADDR, COUNT, pin_name}
+
+TYPE is one of HAL_BIT, HAL_FLOAT, HAL_S32, HAL_U32
+
+FUNC
+ 1 = Read Coils
+ 3 = Read Multiple Holding Registers
+ 4 = Read Input Register
+ 5 = Wrie Single Coil
+ 6 = Write Single Holding Register
+15 = Write Multiple Coils
+16 = Write Multiple Holding Registers
+
+COUNT = number of coils/registers to read
+*/
+
+#define MAX_MSG_LEN 16   // may be increased if necessary to max 251
+//#define DEBUG 3
+
+static const hm2_modbus_chan_descriptor_t channels[] = {
+
+// Read control data ( FUNC = 1 )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+ //{HAL_BIT,     1, 0x0000,     8, "Read_Control"},
+   {HAL_BIT,     1, 0x0000,     1, "RC.Operation"},
+ //{HAL_BIT,     1, 0x0001,     1, "RC.JOG"},          not used
+   {HAL_BIT,     1, 0x0002,     1, "RC.f/r"},
+   {HAL_BIT,     1, 0x0003,     1, "RC.In_operation"},
+ //{HAL_BIT,     1, 0x0004,     1, "RC.In_jogging"},   not used
+   {HAL_BIT,     1, 0x0005,     1, "RC.In_f/r"},
+   {HAL_BIT,     1, 0x0006,     1, "RC.In_braking"},
+   {HAL_BIT,     1, 0x0007,     1, "RC.F_tracking"},
+
+// Write control data ( FUNC = 5 )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+   {HAL_BIT,     5, 0x0048,     1, "WC.run"},
+ //{HAL_BIT,     5, 0x0049,     1, "WC.for"},  not used
+ //{HAL_BIT,     5, 0x004A,     1, "WC.rev"},  not used
+   {HAL_BIT,     5, 0x004B,     1, "WC.stop"},
+   {HAL_BIT,     5, 0x004C,     1, "WC.f/r"},
+ //{HAL_BIT,     5, 0x004D,     1, "WC.jog"},  not used
+ //{HAL_BIT,     5, 0x004E,     1, "WC.jogf"}, not used
+ //{HAL_BIT,     5, 0x004F,     1, "WC.jogr"}, not used
+
+// Write inverter frequency data ( FUNC = 6 )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+   {HAL_FLOAT,   6, 0x0201,     1, "Write_F.set"},
+
+// Read control status data ( FUNC = 4 )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+   {HAL_FLOAT,   4, 0x0000,     1, "RCS.Out_F"},
+   {HAL_FLOAT,   4, 0x0001,     1, "RCS.Set_F"},
+   {HAL_FLOAT,   4, 0x0002,     1, "RCS.Out_A"},
+   {HAL_FLOAT,   4, 0x0003,     1, "RCS.rpm"},
+   {HAL_FLOAT,   4, 0x0004,     1, "RCS.DCV"},
+   {HAL_FLOAT,   4, 0x0005,     1, "RCS.ACV"},
+   {HAL_FLOAT,   4, 0x0006,     1, "RCS.Temp"},
+ //{HAL_FLOAT,   4, 0x0007,     1, "RCS.Count"},        no Data
+ //{HAL_FLOAT,   4, 0x0008,     1, "RCS.PID_Target"},   changes not (ever 500)
+ //{HAL_FLOAT,   4, 0x0009,     1, "RCS.PID_FeedBack"}, no Data
+   {HAL_FLOAT,   4, 0x000A,     1, "RCS.CurrentFault"},
+   {HAL_FLOAT,   4, 0x000B,     1, "RCS.OperateHours"},
+ //{HAL_FLOAT,   4, 0x000C,     1, "RCS.Out_Power"},    no Data
+   {HAL_U32,     4, 0x000D,     1, "RCS.X_Term_State"},
+
+// Write Relay Control ( FUNC = 6 )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+   {HAL_FLOAT,   6, 0x0204,     1, "Relay.set"},
+   
+// Read Write Parameter ( FUNC[] = {3, 6} )
+// {TYPE,     FUNC,   ADDR, COUNT, pin_name}
+   {HAL_FLOAT,   6, 0x0000,     1, "000_ParamLock.set"},
+   {HAL_FLOAT,   3, 0x0000,     1, "000_ParamLock.read"},
+// {HAL_U32,     3, 0x0000,     1, "000_ParamLock.read"},
+// {HAL_U32,     6, 0x0000,     1, "000_ParamLock.set"},
+// {HAL_FLOAT,   3, 0x0001,     1, "001_SrcRunCom.read"},
+// {HAL_FLOAT,   6, 0x0001,     1, "001_SrcRunCom.set"},
+// {HAL_FLOAT,   3, 0x0002,     1, "002_Src_Op_F.read"},
+// {HAL_FLOAT,   6, 0x0002,     1, "002_Src_Op_F.set"},
+// {HAL_FLOAT,   3, 0x0003,     1, "003_MainF.read"},
+// {HAL_FLOAT,   6, 0x0003,     1, "003_MainF.set"},
+};
+
+// vim: syn=c
