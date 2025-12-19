@@ -40,8 +40,8 @@ static const hm2_modbus_chan_descriptor_t cyclic_channels[] = {
 // Write control data ( FUNC = 5 )
 // {TYPE,     FUNC,   ADDR, COUNT, pin_name}
    {HAL_BIT,     5, 0x0048,     1, "WC.run"},
- //{HAL_BIT,     5, 0x0049,     1, "WC.for"},  not used
- //{HAL_BIT,     5, 0x004A,     1, "WC.rev"},  not used
+   {HAL_BIT,     5, 0x0049,     1, "WC.for"},
+   {HAL_BIT,     5, 0x004A,     1, "WC.rev"},
    {HAL_BIT,     5, 0x004B,     1, "WC.stop"},
    {HAL_BIT,     5, 0x004C,     1, "WC.f/r"},
  //{HAL_BIT,     5, 0x004D,     1, "WC.jog"},  not used
